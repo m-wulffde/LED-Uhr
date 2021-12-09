@@ -14,3 +14,5 @@ http://www.m-wulff.de/esp/projekt-uhr/index.php
 
 Die Version 1.1 ist in der ID PlattformIO erstellt worden und beinhaltet die ein Catives Portal von https://github.com/tzapu 
 (Dateien platformio.ini und main.cpp)
+
+Die Version 1.2 enthält jetzt 3 Taster, die zur Steuerung des Farbschemas, Hintergrundbeleuchtung sowie der Lichtspiele beim Stundenwechsel dienen.
