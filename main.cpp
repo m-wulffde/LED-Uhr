@@ -97,7 +97,7 @@ void setup() {
   Serial.println("Digitale-Uhr www.M-Wulff.de");
   pixels.begin();               // NeoPixel-Bibliothek initialisiert.
   // pixels.setBrightness(200);    80 = 1/3 Helligkeit verändert auch die direckten Werte.
-  Pixel_Set(1,0,0);           // rot (Start)
+  Pixel_Set(1,0,0);             // rot (Start)
 
   // ************************* WiFiManager Start
 /*
@@ -128,9 +128,12 @@ void setup() {
 WiFiManager wifiManager;
 // wifiManager.setDebugOutput(false);
 // wifiManager.resetSettings();
-   WiFiManagerParameter Farbschema("parameterId", "Parameter Label", "default value", 40);
-   wifiManager.addParameter(&Farbschema);
+  
+  WiFiManagerParameter Farbschema("parameterId", "Parameter Label", "default value", 40);
+  // wifiManager.addParameter(&Farbschema);  // FarbParameter
   wifiManager.setTimeout(600);
+  wifiManager.setMinimumSignalQuality(20);
+
 // wifiManager.startConfigPortal("LED-Uhr"); // Hier wird das Portal immer Aufgerufen
  wifiManager.autoConnect("LED-Uhr");    // AutoConnectAP (Standard)
   Serial.println("Farbschema:");
@@ -230,7 +233,7 @@ void Pixel_Helligkeit(){
   float H_Wert = analogRead(Lichtsensor);     // lesen der Lichtstärke
   HD_Wert = (HD_Wert * 9 + H_Wert) / 10;
   if (HD != 1) {                                             
-    if (Licht_HD < HD_Wert * 0,8) {           
+    if (Licht_HD <= HD_Wert * 0,8) {           
       HD = 1;  // Hell
     } 
   }
