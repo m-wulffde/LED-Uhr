@@ -1,3 +1,4 @@
+#include <FS.h>                  // Das muss zuerst sein, sonst stürzt alles ab und brennt...
 #include <Arduino.h>
 #include <ESP8266WiFi.h>          // https://github.com/esp8266/Arduino
 
@@ -9,6 +10,7 @@
 #include <Time.h>
 #include <TimeLib.h>              // paulstoffregen/Time @ 1.6
 #include <Adafruit_NeoPixel.h>    // adafruit/Adafruit NeoPixel @ 1.8.2
+#include <ArduinoJson.h>          // https://github.com/bblanchon/ArduinoJson
 
 
 //************* Datenstrukturen ******************************
@@ -28,18 +30,18 @@ const RGB U_St_D[] = {  0,  0,  1,     0,  0,  1,     0,  1,  0,     0,  0,  1};
                                   // Uhr Zeiger Farben
 const RGB Z_St[]   = {128,  0,  0,   128,  0,  0,     0,  0,128,   128,  0,  0};   // Stunden
 const RGB Z_M[]    = { 64, 15,  0,    64, 15,  0,     0, 30, 20,    64, 15,  0};   // Minuten
-const RGB Z_S[]    = {  0,  6,  0,     2,  2,  2,     2,  2,  2,     2,  2,  2};   // Sekunden
+const RGB Z_S[]    = {  1,  1,  1,     2,  2,  2,     2,  2,  2,     2,  2,  2};   // Sekunden
 
                                   // Tage
 const RGB T_HG[]   = {  0,  0,  1,     1,  0,  1,     1,  0,  0,     0,  1,  0};   // Hintergrungfarbe
-const RGB T_P[]    = {  4,  0,  2,     0,  0,  2,     0,  5,  0,     0,  0,  2};   // jeden  5 Tag
-const RGB T_PP[]   = {  8,  0,  4,     0,  0,  6,     0,  12, 2,     0,  0,  6};   // jeden 10 Tag
+const RGB T_P[]    = {  2,  0,  1,     0,  0,  2,     0,  5,  0,     0,  0,  2};   // jeden  5 Tag
+const RGB T_PP[]   = {  4,  0,  2,     0,  0,  6,     0,  12, 2,     0,  0,  6};   // jeden 10 Tag
 const RGB T_A[]    = {  3,  1,  0,     3,  1,  0,     0,  0,  3,     3,  1,  0};   // Alle Tage
 const RGB T_T[]    = {  9,  3,  0,     9,  3,  0,     0,  3,  9,     9,  3,  0};   // Tag
 
                                   // Monate
 const RGB M_HG[]   = {  0,  0,  1,     1,  0,  1,     1,  0,  0,     0,  1,  0};   // Hintergrungfarbe
-const RGB M_P[]    = {  4,  0,  2,     0,  0,  2,     0,  5,  0,     0,  0,  2};   // Kennzeichnung Monat 1 3 6 9 
+const RGB M_P[]    = {  2,  0,  1,     0,  0,  2,     0,  5,  0,     0,  0,  2};   // Kennzeichnung Monat 1 3 6 9 
 const RGB M_A[]    = {  3,  1,  0,     3,  1,  0,     0,  0,  3,     3,  1,  0};   // Alle Monate
 const RGB M_M[]    = {  9,  3,  0,     9,  3,  0,     0,  3,  9,     9,  3,  0};   // Monate
 
@@ -52,33 +54,38 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 
 // Datenkanal für den NeoPixel 
-#define PIN 14     // das ist der D5 Pin
+#define PIN 14              // das ist der D5 Pin
 
 // Taster
-byte Taster1 = 12; // GPIO12 | D6
-byte Taster2 = 13; // GPIO13 | D7
-byte Taster3 = 16; // GPIO16 | D0
+byte Taster1 = 12;          // GPIO12 | D6
+byte Taster2 = 13;          // GPIO13 | D7
+byte Taster3 = 16;          // GPIO16 | D0
 
 // Lichtsensor
 #define Lichtsensor A0
-const short Licht_HD = 20;   // beginn des Dunkelwert
-short HD_Wert = 20;          // Lichtwert von den letzten 9 Messungen.
-byte HD = 1;                 // Letzte Messung Hell/Dunkel
+const short Licht_HD = 20;  // beginn des Dunkelwert
+short HD_Wert = 20;         // Lichtwert von den letzten 9 Messungen.
+byte HD = 1;                // Letzte Messung Hell/Dunkel
 
 // Uhr Aufgehängungs-Winkel
-byte winkel = 1;             // 1 = Normal, 2 = 90 Grad 3 = 180 3 = 270 Grad im Uhrzeigersinn gedreht
-byte LEDpos_r [104];         // Alle 104 LED's rot -Wert zwischenspeichern
-byte LEDpos_g [104];         // Alle 104 LED's grün-Wert zwischenspeichern
-byte LEDpos_b [104];         // Alle 104 LED's blau-Wert zwischenspeichern
+byte winkel = 1;            // 1 = Normal, 2 = 90 Grad 3 = 180 3 = 270 Grad im Uhrzeigersinn gedreht
+char c_winkel[2] = "1";     // Hilfsvariable fürs Web, zur Einstellung
+char mqtt_port[6] = "8080";
+char api_token[34] = "YOUR_API_TOKEN";
+bool shouldSaveConfig = false;        //flag zum Speichern von Daten
+
+byte LEDpos_r [104];        // Alle 104 LED's rot -Wert zwischenspeichern
+byte LEDpos_g [104];        // Alle 104 LED's grün-Wert zwischenspeichern
+byte LEDpos_b [104];        // Alle 104 LED's blau-Wert zwischenspeichern
 
 // Tasterfunktionen
-byte    FT1   = 1;    // Zählfunktionen für Taster 1
-  byte    CS  = 0;    // Farbschema der LED-Uhr
-byte    FT2   = 1;    // Zählfunktionen für Taster 2
-  boolean TMF = true; // Alle Tage / Monate und füllen
-  boolean HG  = true; // Hintergrundbeleuchtung 
-byte    FT3   = 1;    // Zählfunktionen für Taster 3
-  byte    LS  = 1;    // Lichtspiel ja/nein true/false
+byte    FT1   = 1;          // Zählfunktionen für Taster 1
+  byte    CS  = 0;          // Farbschema der LED-Uhr
+byte    FT2   = 1;          // Zählfunktionen für Taster 2
+  boolean TMF = true;       // Alle Tage / Monate und füllen
+  boolean HG  = true;       // Hintergrundbeleuchtung 
+byte    FT3   = 1;          // Zählfunktionen für Taster 3
+  byte    LS  = 1;          // Lichtspiel ja/nein true/false
 
 
 //************* Declarationen der Funktionen ******************************
@@ -94,6 +101,12 @@ bool IsDst();                                     // Sommerzeit
 //************* NeoPixel ******************************
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(104, PIN, NEO_GRB + NEO_KHZ800);  
 
+// Callback, der uns über die Notwendigkeit der Speicherung der Konfiguration informiert
+void saveConfigCallback () {
+  Serial.println("Sollte die Konfiguration speichern");
+  shouldSaveConfig = true;
+}
+
 //**************************************************
 //*************** Setup ****************************
 void setup() {
@@ -108,7 +121,47 @@ void setup() {
   // pixels.setBrightness(200);    80 = 1/3 Helligkeit verändert auch die direckten Werte.
   Pixel_Set(1,0,0);             // rot (Start)
 
-  // ************************* WiFiManager Start
+  //SPIFFS.format();            // sauberes FS, für Tests
+  
+  //read configuration from FS json
+  Serial.println("mounting FS...");
+  if (SPIFFS.begin()) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {                        //file exists, reading and loading
+      Serial.println("reading config file");                          
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        Serial.println("opened config file");
+        size_t size = configFile.size();
+        std::unique_ptr<char[]> buf(new char[size]);            // Allocate a buffer to store contents of the file.
+        configFile.readBytes(buf.get(), size);
+
+#ifdef ARDUINOJSON_VERSION_MAJOR >= 6
+        DynamicJsonDocument json(1024);
+        auto deserializeError = deserializeJson(json, buf.get());
+        serializeJson(json, Serial);
+        if ( ! deserializeError ) {
+#else
+        DynamicJsonBuffer jsonBuffer;
+        JsonObject& json = jsonBuffer.parseObject(buf.get());
+        json.printTo(Serial);
+        if (json.success()) {
+#endif
+          Serial.println("\nparsed json");
+          strcpy(c_winkel, json["c_winkel"]);
+          strcpy(mqtt_port, json["mqtt_port"]);
+          strcpy(api_token, json["api_token"]);
+        } else {
+          Serial.println("failed to load json config");
+        }
+        configFile.close();
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
+  }
+
+  // *** WiFiManager Start ***
 /*
   // Lokale Initialisierung. Sobald das Geschäft erledigt ist, besteht keine Notwendigkeit, es in der Nähe zu behalten
   WiFiManager wifiManager;
@@ -134,29 +187,81 @@ void setup() {
   // Wenn du hier ankommst, hast du dich mit dem WLAN verbunden
   Serial.println("WLAN Verbunden...yeey :)");
 */
-WiFiManager wifiManager;
-// wifiManager.setDebugOutput(false);
-// wifiManager.resetSettings();
-  
-  WiFiManagerParameter Farbschema("parameterId", "Parameter Label", "default value", 40);
-  // wifiManager.addParameter(&Farbschema);  // FarbParameter
-  wifiManager.setTimeout(600);
+
+  WiFiManagerParameter custom_text ( " <p> www.m-wulff.de </p> " );
+  WiFiManagerParameter custom_c_winkel("server", "Aufhaenge Winkel 1 bis 4", c_winkel, 40);
+  WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
+  WiFiManagerParameter custom_api_token("apikey", "API token", api_token, 32);
+  //wifiManager.resetSettings(); // Reset für Tests
+
+
+  WiFiManager wifiManager;
+  wifiManager.setSaveConfigCallback(saveConfigCallback);    //set config save notify callback
+  wifiManager.addParameter(&custom_c_winkel);               // Aufhänge-Winkel
+  wifiManager.addParameter(&custom_mqtt_port);
+  wifiManager.addParameter(&custom_api_token);                     
   wifiManager.setMinimumSignalQuality(20);
+  wifiManager.setTimeout(60);
 
- // wifiManager.startConfigPortal("LED-Uhr"); // Hier wird das Portal immer Aufgerufen
-  wifiManager.autoConnect("LED-Uhr");    // AutoConnectAP (Standard)
-  Serial.println("Farbschema:");
-  Serial.println(Farbschema.getValue());
+ // wifiManager.startConfigPortal("LED-Uhr"); // Portal immer aufrufen
+ // wifiManager.autoConnect("LED-Uhr");       // Portal aufrufen wenn Wifi klappt
+// https://github.com/tzapu/WiFiManager/issues/1280 // Beispiel mit Menü
+  if (!wifiManager.autoConnect("LED-Uhr")) {     // autoConnect (Standard)
+    Serial.println("failed to connect and hit timeout");
+    ESP.restart();
+  }
+  Serial.print("local ip : ");
+  Serial.println(WiFi.localIP());
+ 
+  Pixel_Set(0,0,1);           // blau (WiFiManager Ende)
+  //*** WiFiManager Ende ***
 
- //*** WiFiManager Ende
-  
+  //*** read updated parameters ***
+  strcpy(c_winkel, custom_c_winkel.getValue());
+  strcpy(mqtt_port, custom_mqtt_port.getValue());
+  strcpy(api_token, custom_api_token.getValue());
+  Serial.println("The values in the file are: ");
+  Serial.println("\tc_winkel : " + String(c_winkel));
+  Serial.println("\tmqtt_port : " + String(mqtt_port));
+  Serial.println("\tapi_token : " + String(api_token));
+
+    //save the custom parameters to FS
+  if (shouldSaveConfig) {
+    Serial.println("saving config");
+#ifdef ARDUINOJSON_VERSION_MAJOR >= 6
+    DynamicJsonDocument json(1024);
+#else
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& json = jsonBuffer.createObject();
+#endif
+    json["c_winkel"] = c_winkel;
+    json["mqtt_port"] = mqtt_port;
+    json["api_token"] = api_token;
+
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+      Serial.println("failed to open config file for writing");
+    }
+
+#ifdef ARDUINOJSON_VERSION_MAJOR >= 6
+    serializeJson(json, Serial);
+    serializeJson(json, configFile);
+#else
+    json.printTo(Serial);
+    json.printTo(configFile);
+#endif
+    configFile.close();
+  }
+  //end save
+
+  winkel = atoi(c_winkel);    // c_winkel auf Byte winkel setzen
   Pixel_Set(0,1,0);           // grün (Start)
   SetClockFromNTP();          // Zeit hohlen vom NTP-Server mit Zeitzonen-Korrektur
   Pixel_Set(0,0,0);           // Lichtspiel
   //*** Setup Ende  
 }
 
-//************* NTP-Server Zeit *******************
+//******************** NTP-Server Zeit *********************
 void SetClockFromNTP ()
 {
   timeClient.update();                              // Uhrzeit vom NTP-Server hohlen
@@ -167,24 +272,25 @@ void SetClockFromNTP ()
     adjustTime(hours_Offset_From_GMT * 3600);       // Die Systemzeit mit der benutzerdefinierten Zeitzone (3600 Sekunden in einer Stunden) ausgegleichen.
 }
 
-bool IsDst()                                        // Sommerzeit 
+//****************** Sommer- / Winterzeit ******************
+bool IsDst()                                // Sommerzeit 
 {
   if (month() < 3 || month() > 10)  return false; 
   if (month() > 3 && month() < 10)  return true; 
   int previousSunday = day() - weekday();
   if (month() == 3) return previousSunday >= 24;
   if (month() == 10) return previousSunday < 24;  
-  return false;                                     // Mist, Fehler
+  return false;                             // Mist, Fehler
 }
 
-//*************** Pixel_Set ******************************
+//*********************** Pixel_Set ************************
 void Pixel_Set(byte r,byte g,byte b) {
   for (byte i = 0; i < 104; i++)                     // Alle Pixel die übergebene Farbe
     pixels.setPixelColor(i, r, g, b);
   pixels.show();
 }
 
-//************* FarbenKreis ******************************
+//*********************** FarbenKreis **********************
 // Alle Pixel bekommen die gleiche Farbe
 void FarbenKreis() {
   for (byte i = 0; i < 104; i++) {
@@ -218,7 +324,7 @@ uint32_t Wheel(byte WheelPos) {
   return pixels.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
 
-//********** Funktion für Regenbogenfarben *****************
+//************** Funktion für Regenbogenfarben *************
 void RegenbogenKreis(short Durchl) {
   uint16_t i, j;
   pixels.setBrightness(10);                                         // Ausgabe auf niedrige Helligkeit 
@@ -235,7 +341,7 @@ void RegenbogenKreis(short Durchl) {
   pixels.setBrightness(255);                                        // Ausgabe auf volle Helligkeit
 }
 
-//************* Pixel Helligkeit setzen ********************
+//**************** Pixel Helligkeit setzen *****************
 // Pixel für Dunkel oder Hell-Betrieb setzen
 void Pixel_Helligkeit(){
   float H_Wert = analogRead(Lichtsensor);     // lesen der Lichtstärke
@@ -249,7 +355,8 @@ void Pixel_Helligkeit(){
                                               // Werte mal ausgeben
   // Serial.print("Licht_HD "); Serial.print(Licht_HD); Serial.print(", H_Wert "); Serial.print(H_Wert);  Serial.print(", HD_Wert = "); Serial.print(HD_Wert); Serial.print(", HD = "); Serial.println(HD); 
 }
-//******** Uhr zwischenspeichern für Winkelfunktion *******
+
+//******** Uhr zwischenspeichern für Winkelfunktion ********
 //** Die Uhr wird nicht immer so aufgehängt wie mann sich es vorstellt **
 void setLEDposColor(byte p,byte r,byte g,byte b) {
   LEDpos_r[p] = (r);
@@ -257,7 +364,7 @@ void setLEDposColor(byte p,byte r,byte g,byte b) {
   LEDpos_b[p] = (b);
 }
 
-//************ Uhr Ausgeben mit Winkelfunktion ************
+//************ Uhr Ausgeben mit Winkelfunktion *************
 void showLEDpos () {
   switch (winkel) {                             // Winkel Veränderung
     case 1:                                     // Winkel >>> 12:00 <<< Uhr ist oben (1)
@@ -266,19 +373,19 @@ void showLEDpos () {
       }
       break;
     case 2:                                     // Winkel >>> 3:00 <<< Uhr ist oben
-      for (int p = 0; p < 60; p++) {    // Uhr  
+      for (int p = 0; p < 60; p++) {  // Uhr  
         if (p < 45)
           pixels.setPixelColor(p+15, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p-45, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
-      for (int p = 60; p < 92; p++){    // Tage
+      for (int p = 60; p < 92; p++){  // Tage
         if (p < 60 + 24)
           pixels.setPixelColor(p+ 8, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p-24, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
-      for (int p = 92; p < 104; p++){   // Monat
+      for (int p = 92; p < 104; p++){ // Monat
         if (p < 92 + 9)
           pixels.setPixelColor(p+ 3, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
@@ -286,39 +393,39 @@ void showLEDpos () {
       }
       break;
     case 3:                                     // Winkel >>> 6:00 <<< Uhr ist oben
-      for (int p = 0; p < 60; p++) {    // Uhr  
+      for (int p = 0; p < 60; p++) {  // Uhr  
         if (p < 30)
           pixels.setPixelColor(p+30, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p-30, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
-      for (int p = 60; p < 92; p++){    // Tage
+      for (int p = 60; p < 92; p++){  // Tage
         if (p < 60 + 16)
           pixels.setPixelColor(p+16, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p-16, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
-      for (int p = 92; p < 104; p++){   // Monat
+      for (int p = 92; p < 104; p++){ // Monat
         if (p < 92 + 6)
           pixels.setPixelColor(p+ 6, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p- 6, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
       break;
-     case 4:                                    // Winkel >>> 9:00 <<< Uhr ist oben
-      for (int p = 0; p < 60; p++) {    // Uhr  
+    case 4:                                    // Winkel >>> 9:00 <<< Uhr ist oben
+      for (int p = 0; p < 60; p++) {  // Uhr  
         if (p < 15)
           pixels.setPixelColor(p+45, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p-15, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
-      for (int p = 60; p < 92; p++){    // Tage
+      for (int p = 60; p < 92; p++){  // Tage
         if (p < 60 + 8)
           pixels.setPixelColor(p+24, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
           pixels.setPixelColor(p- 8, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
       }
-      for (int p = 92; p < 104; p++){   // Monat
+      for (int p = 92; p < 104; p++){ // Monat
         if (p < 92 + 3)
           pixels.setPixelColor(p+ 9, pixels.Color(LEDpos_r[p], LEDpos_g[p], LEDpos_b[p]));
         else
@@ -326,34 +433,33 @@ void showLEDpos () {
       }     
       break;
     default:
+      winkel = 1;
       break; // Wird nicht benötigt
   }
 
   pixels.show(); // Alle Pixel anzeigen
 }
 
-//********************** Uhr Setzen ***********************
-//******** den 60er 32er und 12er Ring Wert setzen ********
-
+//*********************** Uhr Setzen ***********************
+//******** den 60er 32er und 12er Ring Wert setzen *********
 void Pixel_Uhr(time_t t){
   byte stunde;
 
-  Serial.print("t "); Serial.print(t);
-  for (int i = 0; i < 60; i++)                                    //###### Uhr
+  for (int i = 0; i < 60; i++)                                                  //###### Uhr
     if (HG)
-      setLEDposColor(i, U_HG[CS].r/HD, U_HG[CS].g/HD, U_HG[CS].b/HD);   // Hintergrund Uhr
+      setLEDposColor(i, U_HG[CS].r/HD, U_HG[CS].g/HD, U_HG[CS].b/HD);                 // Hintergrund Uhr
     else
       setLEDposColor(i, 0,0,0);
   for (int i = 0; i < 60; i = i + 5)
     if (HD == 1)
-      setLEDposColor(i, U_St[CS].r, U_St[CS].g, U_St[CS].b);            // Stunden (hell)
+      setLEDposColor(i, U_St[CS].r, U_St[CS].g, U_St[CS].b);                          // Stunden (hell)
     else
-      setLEDposColor(i, U_St_D[CS].r, U_St_D[CS].g, U_St_D[CS].b);      // Stunde (dunkel)
+      setLEDposColor(i, U_St_D[CS].r, U_St_D[CS].g, U_St_D[CS].b);                    // Stunde (dunkel)
   for (int i = 0; i < 60; i = i + 15)
     if (HD == 1)
-      setLEDposColor(i, U_V[CS].r/HD, U_V[CS].g/HD, U_V[CS].b/HD);      // Viertelstunde Punkt
+      setLEDposColor(i, U_V[CS].r/HD, U_V[CS].g/HD, U_V[CS].b/HD);                    // Viertelstunde Punkt
  
-                                                                  //###### Zeiger Minuten 
+                                                                                //###### Zeiger Minuten 
   // t = 43200;
   if (minute(t) > 0)    // links
     setLEDposColor(minute(t)-1, Z_M[CS].r/10/HD, Z_M[CS].g/10/HD, Z_M[CS].b/10/HD);
@@ -422,7 +528,7 @@ void Pixel_Uhr(time_t t){
   showLEDpos();                                                                         // Alle Pixel anzeigen
 }
 
-//********************** Lichtspiel ***********************
+//*********************** Lichtspiel ***********************
 void Lichtspiel(){
   switch (LS) {
     case 1:
@@ -436,7 +542,7 @@ void Lichtspiel(){
   }
 }
 
-//***************** Funktion der Taste 1 ******************
+//****************** Funktion der Taste 1 ******************
 void Funktion_Taster1(){
   Pixel_Set(1,0,0);
   delay(2000);
@@ -462,7 +568,7 @@ void Funktion_Taster1(){
   }
 }
 
-//***************** Funktion der Taste 2 ******************
+//****************** Funktion der Taste 2 ******************
 void Funktion_Taster2(){
   Pixel_Set(0,5,0);
   delay(2000);
@@ -492,7 +598,7 @@ void Funktion_Taster2(){
   }
 }
 
-//***************** Funktion der Taste 3 ******************
+//****************** Funktion der Taste 3 ******************
 void Funktion_Taster3(){
   Pixel_Set(0,0,5);
   delay(2000);
