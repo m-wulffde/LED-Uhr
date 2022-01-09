@@ -17,4 +17,4 @@ Die Version 1.1 ist in der ID PlattformIO erstellt worden und beinhaltet die ein
 
 Die Version 1.2 enthält jetzt 3 Taster, die zur Steuerung des Farbschemas, Hintergrundbeleuchtung sowie der Lichtspiele beim Stundenwechsel dienen.
 
-Die Version 1.3 enthält den Winkel. Die Uhr kann jetzt in 4 Positionen je 90 Grad Winkel aufgehängt werden. Die Stromzuführung sowie bei Naturhölzern kann die Position gewählt werden.
+Die Version 1.3 enthält den Winkel. Die Uhr kann jetzt in 4 Positionen je 90 Grad Winkel aufgehängt werden. Die Stromzuführung sowie bei Naturhölzern kann die Position gewählt werden. Die Winkelangabe wird im Portal festgelegt.
